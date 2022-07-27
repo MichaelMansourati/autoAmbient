@@ -33,13 +33,16 @@
 	highHatMeasure = chunkedHighHatMeasure.flatten;
 };
 
-~sectionLength = 16;
-
 SynthDef(\harp, {
 	arg freq = 50, out = 1, gate = 1, amp = 0.5, pan=0;
 	var sig, env, envGen, vib;
 
-	env = Env([0, 0.5, 0.2, 0], [0.01, 0.1, 0.2], releaseNode: 2);
+	env = Env(
+		[0, 0.5, 0.2, 0],
+		[0.01, 0.1, 0.5],
+		[3, 0, -3],
+		releaseNode: 2
+	).plot;
 	envGen = EnvGen.ar(envelope: env, gate: gate, doneAction: Done.freeSelf);
 
 	vib = SinOsc.ar(3, 0, 1.25);
@@ -60,10 +63,11 @@ SynthDef(\bassTone, {
 	env = Env(
 		levels: [0, 0.5, 0.2, 0],
 		times: [0.0075, 0.05, 0.94],
+		releaseNode: 2,
 		curve: [3, -3, 0]
 	);
 
-	envGen = EnvGen.ar(envelope: env, gate: 1, doneAction: Done.freeSelf);
+	envGen = EnvGen.ar(envelope: env, gate: gate, doneAction: Done.freeSelf);
 
 	sig = Mix.ar([
 		SinOsc.ar(freq: freq/4, mul: amp*Line.kr(1/2, 1, 0.5)),
@@ -124,7 +128,7 @@ SynthDef("snare", {arg out = 0, amp = 0.1, sinfreq = 175, att = 0.01, rel = 0.2,
 SynthDef(\reverb, {
 	arg in=0, out=0;
 	var sig = In.ar(in, 2);
-	sig = FreeVerb2.ar(sig[0], sig[1], 0.4, 0.6, 0.2);
+	sig = FreeVerb2.ar(sig[0], sig[1], 0.0, 0.6, 0.2);
 	Out.ar(out, sig);
 }).add;
 
@@ -176,8 +180,8 @@ s.newBusAllocators;
 	\octave, Pwrand([3, 4], [0.75, 0.25], inf),
 	\degree, 0,
 	\delta, Pdup(4, Pfunc({ ~crumbleNum.value })).flatten,
-	\sustain, 0,
-	\out, [0, ~reverbBus],
+	// \sustain, TempoClock.default.tempo/(Pkey(\delta)*2),
+	\out, [0],
 	\group, ~sourceGroup,
 	\amp, 0.7,
 	\pan, 0
@@ -241,9 +245,14 @@ s.newBusAllocators;
 	\scale, Pget(\mode, Scale.major, inf),
 	\root, Pget(\pedal, 0, inf),
 	\degree, Pkey(\figures),
-	\delta, Pdup(16, (Prand([0.25,0.125,0.025].collect(~durArr), inf))).flatten(0),
+	\delta, Pdup(16, (Prand([1/4, 1/8, 1/32].collect(~durArr), inf))).flatten(0),
+	// \delta, Pdup(16, (Prand([1/8].collect(~durArr), inf))).flatten(0).trace,
+	// \dur, Pfunc({TempoClock.beatDur/2}),
+	\dur, 1.9,
+	\sustain2, Pkey(\dur).trace,
 	\amp, 0.2,
 	\out, [0, ~delayThenReverbBus],
+	// \out, [0],
 	\group, ~sourceGroup,
 	\pan, Pseq(([0.75, -0.75]!4).flatten.mirror2, inf),
 	\callback, { |e|
@@ -316,7 +325,7 @@ Plambda(Ppar([
 	~bass,
 	~arpsRepeater,
 	~highHat,
-	~tempo,
+	// ~tempo,
 	~snare
 ], inf)).play;
 )
