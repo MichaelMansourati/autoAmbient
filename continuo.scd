@@ -157,11 +157,11 @@ s.newBusAllocators;
 	Scale.minor
 ];
 
-
+~rootOptions = (-5..5);
 ~globals = Pbind(
 	\event, \rest,
 	\scale, Plet(\mode, Prand(~scaleOptions, inf), inf),
-	\root, Plet(\pedal, Pxrand((-5..5), inf)),
+	\root, Plet(\pedal, Pxrand(~rootOptions, inf)),
 	\tuning, Plet(\tuning, Tuning.pythagorean, inf),
 	\arpOrder, Plet(\arpOrder, Pfunc({(0..5).scramble}), inf),
 	\dur, Prand([ 2, 4, [3, 1], [1, 1] ], inf).flatten * 8,
@@ -223,7 +223,15 @@ s.newBusAllocators;
 	].flatten(0);
 }, 1);
 
+//set the first seven notes of the 8 note arpeggio to be of length "dur"
+//and the final note to be the leftover time in a measure adding up to 2 beats (0.25*8)
+//i.e 7 instances of 0.125, then one instance of 1.125
 ~durArr = {|dur| dur!7++[(0.25*8)-(dur*7)]};
+
+//address to send OSC messages
+~oscAddress = NetAddr.new("localhost", 8081);
+
+
 ~arps = Pbind(
 	\instrument, \harp,
 	\tuning, Pget(\tuning, Tuning.pythagorean, inf),
@@ -237,12 +245,17 @@ s.newBusAllocators;
 	\amp, 0.2,
 	\out, [0, ~delayThenReverbBus],
 	\group, ~sourceGroup,
-	\pan, Pseq(([0.75, -0.75]!4).flatten.mirror2, inf)
+	\pan, Pseq(([0.75, -0.75]!4).flatten.mirror2, inf),
+	\callback, { |e|
+		var minDegree = topEnvironment[\figs].flatten(1).minItem() + topEnvironment[\rootOptions][0];
+		var absoluteDegree = e[\degree] + e[\root] - minDegree;
+		topEnvironment[\oscAddress].sendMsg("/message", absoluteDegree);
+	}
 );
 
-~comps = Ptpar([
+~arpsRepeater = Ptpar([
 	0,
-	~arps,
+	~arps
 ], inf);
 
 ~highHat = Pbind(
@@ -263,6 +276,21 @@ s.newBusAllocators;
 	\pan, Pseq([0.2, 0.3], inf)
 );
 
+~snare = Pbind(
+	\instrument, \snare,
+	\input, Pdup(4, (Pfunc({
+		var durs = ~crumbleNum.value(crumbles: [1/8, 1/4, 3/8, 1/2, 5/8, 3/4]);
+		var types = Array.fill(durs.size, { [\note, Rest()].wchoose([0.8, 0.2]) });
+
+		durs.collect({ |dur, i| (dur: dur, type: types[i] ) });
+	}))).flatten,
+	\type, Pkey(\input).collect({ |d| d[\type] }),
+	\dur, Pkey(\input).collect({ |d| d[\dur] }),
+	\sustain, Pkey(\dur) * TempoClock.default.tempo,
+	\out, [0, ~reverbBus],
+	\amp, 0.1
+);
+
 ~changeTempo = {
 	arg newTempo = 1, changeDur = 1, stepCount = 10;
 	var delta = newTempo - TempoClock.default.tempo;
@@ -277,22 +305,8 @@ s.newBusAllocators;
 ~tempo = Pbind(
 	\amp, Rest(),
 	\dur, Prand([64, 128, 256], inf),
-	\tempoNum, Pxrand([0.7, 0.85, 1], inf), //0.2??????
+	\tempoNum, Pxrand([0.75, 0.85, 1], inf), //0.2??????
 	\callback, { |e| topEnvironment[\changeTempo].value(e.tempoNum, 2, 20) }
-);
-
-~snare = Pbind(
-	\input, Pdup(4, (Pfunc({
-		var durs = ~crumbleNum.value(crumbles: [1/8, 1/4, 3/8, 1/2, 5/8, 3/4]);
-		var types = Array.fill(durs.size, { [\note, Rest()].wchoose([0.8, 0.2]) });
-
-		durs.collect({ |dur, i| (dur: dur, type: types[i] ) });
-	}))).flatten,
-	\type, Pkey(\input).collect({ |d| d[\type] }),
-	\instrument, \snare,
-	\dur, Pkey(\input).collect({ |d| d[\dur] }),
-	\sustain, 0,
-	\amp, 0.1
 );
 
 Plambda(Ppar([
@@ -300,9 +314,11 @@ Plambda(Ppar([
 	~bassDurs,
 	~kick,
 	~bass,
-	~comps,
+	~arpsRepeater,
 	~highHat,
 	~tempo,
 	~snare
 ], inf)).play;
 )
+
+~changeTempo.value(0.2);
