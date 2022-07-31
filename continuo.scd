@@ -42,12 +42,13 @@ SynthDef(\harp, {
 		[0.01, 0.1, 0.5],
 		[3, 0, -3],
 		releaseNode: 2
-	).plot;
+	);
 	envGen = EnvGen.ar(envelope: env, gate: gate, doneAction: Done.freeSelf);
 
 	vib = SinOsc.ar(3, 0, 1.25);
 	sig = Mix.ar([
-		SinOsc.ar(freq: freq + vib, mul: amp),
+		SinOsc.ar(freq: freq, mul: amp),
+		Saw.ar(freq: freq + vib, mul: amp*Line.kr(1/4, 1/12, 0.5)),
 		Pulse.ar(freq: freq + vib, mul: amp*Line.kr(1/4, 1/12, 0.1))
 	]);
 	sig = sig * envGen;
@@ -62,7 +63,7 @@ SynthDef(\bassTone, {
 
 	env = Env(
 		levels: [0, 0.5, 0.2, 0],
-		times: [0.0075, 0.05, 0.94],
+		times: [0.0075, 0.05, 0.1],
 		releaseNode: 2,
 		curve: [3, -3, 0]
 	);
@@ -70,10 +71,13 @@ SynthDef(\bassTone, {
 	envGen = EnvGen.ar(envelope: env, gate: gate, doneAction: Done.freeSelf);
 
 	sig = Mix.ar([
-		SinOsc.ar(freq: freq/4, mul: amp*Line.kr(1/2, 1, 0.5)),
-		SinOsc.ar(freq: freq/2, mul: amp*Line.kr(1/2, 1, 0.5)),
+		SinOsc.ar(freq: freq/4, mul: amp*Line.kr(1/12, 1, 0.25)),
+		SinOsc.ar(freq: freq/2, mul: amp*Line.kr(1/12, 1, 0.25)),
 		SinOsc.ar(freq: freq, mul: amp),
-		SinOsc.ar(freq: freq*2, mul: amp*Line.kr(1/3, 1/12, 0.5)),
+		Saw.ar(freq: freq, mul: amp/24),
+		Saw.ar(freq: freq/2, mul: amp/24),
+		Saw.ar(freq: freq*2, mul: amp*Line.kr(1/12, 0, 0.25)),
+		SinOsc.ar(freq: freq*2, mul: amp*Line.kr(1/12, 0, 0.25)),
 	]);
 	sig = sig * envGen;
 	sig = Pan2.ar(sig, pan);
@@ -177,13 +181,13 @@ s.newBusAllocators;
 	\root, Pget(\pedal, 0, inf),
 	\scale, Pget(\mode, Scale.major, inf),
 	\tuning, Pget(\tuning, Tuning.pythagorean, inf),
-	\octave, Pwrand([3, 4], [0.75, 0.25], inf),
-	\degree, 0,
+	\octave, 3,
+	\degree, Pwrand([-1, 0, 4, 6, 7], [1/20, 5/10, 2/10, 1/20, 2/10],  inf),
 	\delta, Pdup(4, Pfunc({ ~crumbleNum.value })).flatten,
-	// \sustain, TempoClock.default.tempo/(Pkey(\delta)*2),
+	\dur, Pkey(\delta),
 	\out, [0],
 	\group, ~sourceGroup,
-	\amp, 0.7,
+	\amp, 0.8,
 	\pan, 0
 );
 
@@ -246,13 +250,10 @@ s.newBusAllocators;
 	\root, Pget(\pedal, 0, inf),
 	\degree, Pkey(\figures),
 	\delta, Pdup(16, (Prand([1/4, 1/8, 1/32].collect(~durArr), inf))).flatten(0),
-	// \delta, Pdup(16, (Prand([1/8].collect(~durArr), inf))).flatten(0).trace,
-	// \dur, Pfunc({TempoClock.beatDur/2}),
 	\dur, 1.9,
-	\sustain2, Pkey(\dur).trace,
-	\amp, 0.2,
+	\sustain2, Pkey(\dur),
+	\amp, 0.1,
 	\out, [0, ~delayThenReverbBus],
-	// \out, [0],
 	\group, ~sourceGroup,
 	\pan, Pseq(([0.75, -0.75]!4).flatten.mirror2, inf),
 	\callback, { |e|
@@ -314,7 +315,7 @@ s.newBusAllocators;
 ~tempo = Pbind(
 	\amp, Rest(),
 	\dur, Prand([64, 128, 256], inf),
-	\tempoNum, Pxrand([0.75, 0.85, 1], inf), //0.2??????
+	\tempoNum, Pxrand([0.75, 0.85, 1, 1.2, 0.3], inf), //0.2??????
 	\callback, { |e| topEnvironment[\changeTempo].value(e.tempoNum, 2, 20) }
 );
 
@@ -325,9 +326,9 @@ Plambda(Ppar([
 	~bass,
 	~arpsRepeater,
 	~highHat,
-	// ~tempo,
+	~tempo,
 	~snare
 ], inf)).play;
 )
 
-~changeTempo.value(0.2);
+~changeTempo.value(0.85);
